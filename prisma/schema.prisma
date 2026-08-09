@@ -1,0 +1,153 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String   @id @default(cuid())
+  email           String   @unique
+  passwordHash    String
+  name            String?
+  avatarUrl       String?
+  role            Role     @default(USER)
+  onboardingDone  Boolean  @default(false)
+  jobRole         String?
+  useCase         String?
+  plan            Plan     @default(FREE)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  sessions        Session[]
+  prompts         Prompt[]
+  collections     Collection[]
+  notifications   Notification[]
+  runs            Run[]
+  auditLogs       AuditLog[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Collection {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  description String?
+  color     String   @default("zinc")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  prompts   Prompt[]
+
+  @@index([userId])
+}
+
+model Prompt {
+  id           String   @id @default(cuid())
+  userId       String
+  collectionId String?
+  title        String
+  description  String?
+  content      String
+  model        String   @default("gpt-4o")
+  variables    String   @default("[]")
+  tags         String   @default("[]")
+  isStarred    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  collection   Collection? @relation(fields: [collectionId], references: [id], onDelete: SetNull)
+  versions     PromptVersion[]
+  runs         Run[]
+
+  @@index([userId])
+  @@index([collectionId])
+}
+
+model PromptVersion {
+  id        String   @id @default(cuid())
+  promptId  String
+  content   String
+  version   Int
+  note      String?
+  createdAt DateTime @default(now())
+  prompt    Prompt   @relation(fields: [promptId], references: [id], onDelete: Cascade)
+
+  @@index([promptId])
+}
+
+model Run {
+  id         String   @id @default(cuid())
+  promptId   String
+  userId     String
+  input      String
+  output     String?
+  model      String
+  tokensIn   Int      @default(0)
+  tokensOut  Int      @default(0)
+  latencyMs  Int      @default(0)
+  status     RunStatus @default(SUCCESS)
+  error      String?
+  createdAt  DateTime @default(now())
+  prompt     Prompt   @relation(fields: [promptId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([promptId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  meta      String   @default("{}")
+  ip        String?
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([entity])
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum Plan {
+  FREE
+  PRO
+  TEAM
+}
+
+enum RunStatus {
+  SUCCESS
+  FAILED
+}

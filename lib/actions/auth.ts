@@ -1,0 +1,231 @@
+"use server";
+
+import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
+import {
+  createSession,
+  destroySession,
+  hashPassword,
+  verifyPassword,
+} from "@/lib/auth";
+import {
+  loginSchema,
+  registerSchema,
+  onboardingSchema,
+  profileSchema,
+  changePasswordSchema,
+} from "@/lib/validations";
+
+export type ActionState = { error?: string; success?: string } | undefined;
+
+async function audit(
+  userId: string | null,
+  action: string,
+  entity: string,
+  entityId?: string,
+  meta?: Record<string, unknown>
+) {
+  await prisma.auditLog
+    .create({
+      data: {
+        userId,
+        action,
+        entity,
+        entityId,
+        meta: meta ? JSON.stringify(meta) : "{}",
+      },
+    })
+    .catch(() => {});
+}
+
+export async function registerAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const parsed = registerSchema.safeParse({
+    name: formData.get("name"),
+    email: formData.get("email"),
+    password: formData.get("password"),
+    confirmPassword: formData.get("confirmPassword"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message };
+  }
+  const { name, email, password } = parsed.data;
+  const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+  if (existing) {
+    return { error: "An account with this email already exists." };
+  }
+  const passwordHash = await hashPassword(password);
+  const user = await prisma.user.create({
+    data: { email: email.toLowerCase(), name, passwordHash },
+  });
+  await prisma.notification.create({
+    data: {
+      userId: user.id,
+      type: "welcome",
+      title: "Welcome to PromptForge",
+      message: "Your workspace is ready. Complete onboarding to start building prompts.",
+    },
+  });
+  await audit(user.id, "register", "user", user.id);
+  await createSession(user);
+  redirect("/onboarding");
+}
+
+export async function loginAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const parsed = loginSchema.safeParse({
+    email: formData.get("email"),
+    password: formData.get("password"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message };
+  }
+  const { email, password } = parsed.data;
+  const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+  if (!user) {
+    return { error: "Invalid email or password." };
+  }
+  const valid = await verifyPassword(password, user.passwordHash);
+  if (!valid) {
+    return { error: "Invalid email or password." };
+  }
+  await audit(user.id, "login", "user", user.id);
+  await createSession(user);
+  redirect(user.onboardingDone ? "/dashboard" : "/onboarding");
+}
+
+export async function logoutAction() {
+  await destroySession();
+  redirect("/login");
+}
+
+export async function onboardingAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const { getSession } = await import("@/lib/auth");
+  const session = await getSession();
+  if (!session) return { error: "Not authenticated" };
+
+  const raw = {
+    jobRole: (formData.get("jobRole") as string)?.trim() || "",
+    useCase: (formData.get("useCase") as string)?.trim() || "",
+  };
+
+  const parsed = onboardingSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message };
+  }
+  const user = await prisma.user.update({
+    where: { id: session.id },
+    data: { jobRole: parsed.data.jobRole, useCase: parsed.data.useCase, onboardingDone: true },
+  });
+  await audit(session.id, "onboard", "user", session.id);
+  // Re-issue session so the JWT reflects onboardingDone: true
+  await createSession(user);
+  redirect("/dashboard");
+}
+
+export async function skipOnboardingAction() {
+  const { getSession } = await import("@/lib/auth");
+  const session = await getSession();
+  if (!session) redirect("/login");
+  const user = await prisma.user.update({
+    where: { id: session.id },
+    data: { onboardingDone: true },
+  });
+  await createSession(user);
+  redirect("/dashboard");
+}
+
+export async function updateProfileAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const { getSession } = await import("@/lib/auth");
+  const session = await getSession();
+  if (!session) return { error: "Not authenticated" };
+
+  const parsed = profileSchema.safeParse({
+    name: formData.get("name"),
+    jobRole: formData.get("jobRole"),
+    avatarUrl: formData.get("avatarUrl"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message };
+  }
+  await prisma.user.update({
+    where: { id: session.id },
+    data: {
+      name: parsed.data.name,
+      jobRole: parsed.data.jobRole ?? null,
+      avatarUrl: parsed.data.avatarUrl || null,
+    },
+  });
+  await audit(session.id, "update_profile", "user", session.id);
+  return { success: "Profile updated successfully." };
+}
+
+export async function changePasswordAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const { getSession } = await import("@/lib/auth");
+  const session = await getSession();
+  if (!session) return { error: "Not authenticated" };
+
+  const parsed = changePasswordSchema.safeParse({
+    currentPassword: formData.get("currentPassword"),
+    newPassword: formData.get("newPassword"),
+    confirmPassword: formData.get("confirmPassword"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message };
+  }
+  const user = await prisma.user.findUnique({ where: { id: session.id } });
+  if (!user) return { error: "User not found." };
+  const valid = await verifyPassword(parsed.data.currentPassword, user.passwordHash);
+  if (!valid) return { error: "Current password is incorrect." };
+  const newHash = await hashPassword(parsed.data.newPassword);
+  await prisma.user.update({ where: { id: session.id }, data: { passwordHash: newHash } });
+  await audit(session.id, "change_password", "user", session.id);
+  return { success: "Password changed successfully." };
+}
+
+export async function updatePlanAction(plan: "FREE" | "PRO" | "TEAM"): Promise<ActionState> {
+  const { getSession } = await import("@/lib/auth");
+  const session = await getSession();
+  if (!session) return { error: "Not authenticated" };
+  await prisma.user.update({ where: { id: session.id }, data: { plan } });
+  await prisma.notification.create({
+    data: {
+      userId: session.id,
+      type: "plan",
+      title: "Plan updated",
+      message: `Your plan is now ${plan}.`,
+    },
+  });
+  await audit(session.id, "change_plan", "user", session.id, { plan });
+  return { success: `You are now on the ${plan} plan.` };
+}
+
+export async function deleteAccountAction(): Promise<ActionState> {
+  const { getSession } = await import("@/lib/auth");
+  const session = await getSession();
+  if (!session) return { error: "Not authenticated" };
+  await prisma.user.delete({ where: { id: session.id } });
+  await destroySession();
+  redirect("/login");
+}
+
+export async function forgotPasswordAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const email = (formData.get("email") as string)?.toLowerCase();
+  if (!email) return { error: "Email is required" };
+  const user = await prisma.user.findUnique({ where: { email } });
+  // Always return success to avoid account enumeration
+  if (user) {
+    const token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+    await prisma.auditLog.create({
+      data: {
+        userId: user.id,
+        action: "password_reset_request",
+        entity: "user",
+        entityId: user.id,
+        meta: JSON.stringify({ token, expires: Date.now() + 1000 * 60 * 30 }),
+      },
+    });
+    if (process.env.NODE_ENV !== "production") {
+      console.log(`[Password reset] token for ${email}: ${token}`);
+    }
+  }
+  return { success: "If an account exists, a reset link has been sent." };
+}
