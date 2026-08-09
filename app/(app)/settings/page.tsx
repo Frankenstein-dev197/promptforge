@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
-import { getSession } from "@/lib/auth";
+import { Suspense } from "react";
+import { getSession, getCurrentUser } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { getPlanConfig } from "@/lib/plans";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -7,16 +9,30 @@ import { ProfileSettingsForm } from "./profile-form";
 import { SecuritySettingsForm } from "./security-form";
 import { BillingSettings } from "./billing-settings";
 import { NotificationPreferencesForm } from "./notification-prefs";
+import { LoginMethods } from "./login-methods";
 
 export const metadata: Metadata = { title: "Settings" };
 
 type SearchParams = Promise<{ tab?: string }>;
+
+const ALL_PROVIDERS = ["google", "github"];
 
 export default async function SettingsPage({ searchParams }: { searchParams: SearchParams }) {
   const session = await getSession();
   if (!session) return null;
   const { tab } = await searchParams;
   const plan = getPlanConfig(session.plan);
+
+  const user = await getCurrentUser();
+  const linked = await prisma.account.findMany({
+    where: { userId: session.id },
+    select: { provider: true },
+  });
+  const linkedProviders = new Set(linked.map((a) => a.provider));
+  const accounts = ALL_PROVIDERS.map((provider) => ({
+    provider,
+    connected: linkedProviders.has(provider),
+  }));
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -51,14 +67,38 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
           </Card>
         </TabsContent>
 
-        <TabsContent value="security" className="mt-4">
+        <TabsContent value="security" className="mt-4 space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Change password</CardTitle>
-              <CardDescription>Use a strong, unique password.</CardDescription>
+              <CardTitle className="text-base">Sign-in methods</CardTitle>
+              <CardDescription>
+                Manage how you sign in. Connect a social provider or set a password.
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <SecuritySettingsForm />
+              <Suspense>
+                <LoginMethods
+                  email={session.email}
+                  hasPassword={Boolean(user?.passwordHash)}
+                  accounts={accounts}
+                />
+              </Suspense>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">
+                {user?.passwordHash ? "Change password" : "Set a password"}
+              </CardTitle>
+              <CardDescription>
+                {user?.passwordHash
+                  ? "Use a strong, unique password."
+                  : "Set a password so you can also sign in with your email."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <SecuritySettingsForm hasPassword={Boolean(user?.passwordHash)} />
             </CardContent>
           </Card>
         </TabsContent>

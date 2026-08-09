@@ -18,6 +18,38 @@ import {
 
 export type ActionState = { error?: string; success?: string } | undefined;
 
+/**
+ * Disconnect a linked OAuth account from the current user.
+ * Guarded so a user can never lock themselves out: at least one other sign-in
+ * method (a password or another provider) must remain.
+ */
+export async function disconnectProviderAction(provider: string): Promise<ActionState> {
+  const { getSession } = await import("@/lib/auth");
+  const session = await getSession();
+  if (!session) return { error: "Not authenticated" };
+
+  const account = await prisma.account.findFirst({
+    where: { userId: session.id, provider },
+  });
+  if (!account) return { error: "This provider is not connected." };
+
+  const otherAccounts = await prisma.account.count({
+    where: { userId: session.id, NOT: { id: account.id } },
+  });
+  const user = await prisma.user.findUnique({ where: { id: session.id }, select: { passwordHash: true } });
+  const hasPassword = Boolean(user?.passwordHash);
+
+  if (!hasPassword && otherAccounts === 0) {
+    return {
+      error: "You must keep at least one sign-in method. Set a password before removing this connection.",
+    };
+  }
+
+  await prisma.account.delete({ where: { id: account.id } });
+  await audit(session.id, "disconnect_provider", "account", account.id, { provider });
+  return { success: `${provider} disconnected.` };
+}
+
 async function audit(
   userId: string | null,
   action: string,
@@ -80,7 +112,7 @@ export async function loginAction(_prev: ActionState, formData: FormData): Promi
   }
   const { email, password } = parsed.data;
   const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-  if (!user) {
+  if (!user || !user.passwordHash) {
     return { error: "Invalid email or password." };
   }
   const valid = await verifyPassword(password, user.passwordHash);
@@ -173,12 +205,15 @@ export async function changePasswordAction(_prev: ActionState, formData: FormDat
   }
   const user = await prisma.user.findUnique({ where: { id: session.id } });
   if (!user) return { error: "User not found." };
-  const valid = await verifyPassword(parsed.data.currentPassword, user.passwordHash);
-  if (!valid) return { error: "Current password is incorrect." };
+  // Users who signed up via OAuth and never set a password can create one here.
+  if (user.passwordHash) {
+    const valid = await verifyPassword(parsed.data.currentPassword, user.passwordHash);
+    if (!valid) return { error: "Current password is incorrect." };
+  }
   const newHash = await hashPassword(parsed.data.newPassword);
   await prisma.user.update({ where: { id: session.id }, data: { passwordHash: newHash } });
-  await audit(session.id, "change_password", "user", session.id);
-  return { success: "Password changed successfully." };
+  await audit(session.id, user.passwordHash ? "change_password" : "set_password", "user", session.id);
+  return { success: "Password saved successfully." };
 }
 
 export async function updatePlanAction(plan: "FREE" | "PRO" | "TEAM"): Promise<ActionState> {

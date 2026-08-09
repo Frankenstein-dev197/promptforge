@@ -15,7 +15,7 @@ PromptForge is a professional SaaS workspace for managing, versioning, testing, 
 - **AI prompt optimizer** — One-click prompt rewriting using best practices (Pro+ plans)
 - **Run analytics** — Track every execution, monitor token usage, and spot regressions
 - **Notifications** — In-app notifications with unread counters and management
-- **Authentication** — bcrypt password hashing, JWT sessions in httpOnly cookies, protected routes
+- **Authentication** — Email/password (bcrypt) **plus Google & GitHub OAuth**, JWT sessions in httpOnly cookies, protected routes, linkable multi-provider accounts
 - **Onboarding** — Quick role + use-case setup after registration
 - **Profile & settings** — Profile editing, password changes, notification preferences, plan management
 - **Subscriptions** — Free, Pro, and Team plans with enforced limits
@@ -37,7 +37,7 @@ PromptForge is a professional SaaS workspace for managing, versioning, testing, 
 | Icons       | Lucide React                                 |
 | Charts      | Recharts                                     |
 | Database    | SQLite via Prisma ORM                        |
-| Auth        | bcryptjs + jose (JWT)                        |
+| Auth        | bcryptjs + jose (JWT) + OAuth (Google, GitHub)            |
 | Validation  | Zod                                          |
 | Forms       | React Hook Form + Server Actions             |
 | Toasts      | Sonner                                       |
@@ -93,10 +93,27 @@ After seeding, these accounts are available:
 | Variable               | Description                                              | Default                          |
 | ---------------------- | -------------------------------------------------------- | -------------------------------- |
 | `DATABASE_URL`         | Prisma database URL (SQLite file path)                   | `file:./dev.db`                  |
-| `APP_URL`              | Public app URL                                           | `http://localhost:3000`          |
-| `AUTH_SECRET`          | Secret used to sign JWT session tokens                   | dev default (change in prod)     |
+| `APP_URL`              | Public app URL (used to build OAuth callback URLs)       | `http://localhost:3000`          |
+| `AUTH_SECRET`          | Secret used to sign JWT session + OAuth state tokens     | dev default (change in prod)     |
 | `SESSION_COOKIE_NAME`  | Name of the session cookie                               | `pf_session`                     |
 | `OPENAI_API_KEY`       | Optional. Enables real OpenAI completions & optimizer    | empty (uses local engine)        |
+| `GOOGLE_CLIENT_ID`     | Google OAuth client ID (server-side only)                | empty (Google hidden)            |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret (server-side only)            | empty (Google hidden)            |
+| `GITHUB_CLIENT_ID`     | GitHub OAuth client ID (server-side only)                | empty (GitHub hidden)            |
+| `GITHUB_CLIENT_SECRET` | GitHub OAuth client secret (server-side only)            | empty (GitHub hidden)            |
+
+#### OAuth providers (optional but recommended)
+
+PromptForge supports **Google** and **GitHub** sign-in out of the box. Providers with missing credentials are simply hidden from the UI, so email/password auth always works.
+
+1. **Google** — Create OAuth credentials at the [Google Cloud Console](https://console.cloud.google.com/apis/credentials).
+   Add the authorized redirect URI: `<APP_URL>/api/auth/oauth/google/callback`.
+   Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+2. **GitHub** — Register an OAuth App at [GitHub Developer Settings](https://github.com/settings/developers).
+   Set the Authorization callback URL to `<APP_URL>/api/auth/oauth/github/callback`.
+   Set `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`.
+
+Adding another provider later requires only a new entry in `OAUTH_PROVIDERS` (`lib/oauth.ts`) and the corresponding login/callback routes are already generic.
 
 ### AI completions
 
@@ -203,6 +220,20 @@ middleware.ts              # Route protection (JWT verification)
 4. `getSession()` server-side validates both JWT signature and DB session existence
 5. Onboarding updates `onboardingDone` and re-issues the session JWT
 
+### OAuth flow
+
+1. User clicks "Continue with Google/GitHub" → `GET /api/auth/oauth/:provider/login`
+2. Server generates a PKCE pair + signed state JWT, sets a nonce cookie, redirects to the provider
+3. Provider redirects back to `GET /api/auth/oauth/:provider/callback` with `code` + `state`
+4. Server verifies the signed state (and nonce cookie), exchanges the code for tokens via PKCE, fetches the provider profile
+5. Account linking (no duplicate users):
+   - If an `Account` exists for this provider+id → sign that user in
+   - Else if a `User` with the same email exists → create an `Account` linked to that user
+   - Else → create a new password-less `User` + `Account`
+6. Existing session infra (`createSession`) issues the same JWT cookie — identical to email login
+7. Redirect to onboarding (if incomplete) or dashboard (otherwise)
+8. From Settings → Security, a signed-in user can connect/disconnect providers (`mode=link`); disconnect is blocked if it would leave zero sign-in methods
+
 ### Data isolation
 
 Every query is scoped by `userId` from the session. A user can never access another user's prompts, collections, runs, or notifications. Admin routes require `role === "ADMIN"` enforced both in middleware and server actions.
@@ -232,12 +263,15 @@ npm run start
 
 ## 🔐 Security
 
-- Passwords hashed with bcrypt (10 rounds)
+- Passwords hashed with bcrypt (10 rounds); OAuth-only users have no password
 - JWT sessions signed with `AUTH_SECRET`, stored in httpOnly cookies
+- OAuth uses PKCE (S256) + signed state JWT + nonce cookie (CSRF protection)
+- OAuth client secrets never reach the client (server-side routes only)
+- Account linking by email prevents duplicate users; providers are never force-linked to the wrong account
+- Disconnecting a provider is blocked if it would leave zero sign-in methods (lock-out prevention)
 - Per-user data isolation on every query
 - Admin routes protected by role check
 - Zod validation on all inputs
-- No secrets exposed to the frontend
 - `.env` excluded from Git via `.gitignore`
 
 ---
