@@ -3,12 +3,15 @@
 import * as React from "react";
 import { useFormState, useFormStatus } from "react-dom";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { registerAction } from "@/lib/actions/auth";
 import { AuthShell } from "@/components/auth-shell";
+import { OAuthButtons } from "@/components/oauth-buttons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Separator } from "@/components/ui/separator";
 import { Loader2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
@@ -24,9 +27,13 @@ function SubmitButton() {
 
 export default function RegisterForm() {
   const [state, formAction] = useFormState(registerAction, undefined);
+  const searchParams = useSearchParams();
+  const oauthError = searchParams.get("oauth_error");
+
   React.useEffect(() => {
     if (state?.error) toast.error(state.error);
-  }, [state]);
+    if (oauthError) toast.error(`Sign-up failed: ${oauthError}`);
+  }, [state, oauthError]);
 
   return (
     <AuthShell
@@ -41,6 +48,18 @@ export default function RegisterForm() {
         </>
       }
     >
+      {oauthError && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertDescription>Sign-up failed: {oauthError}</AlertDescription>
+        </Alert>
+      )}
+      <OAuthButtons />
+      <div className="relative my-6">
+        <Separator />
+        <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-3 text-xs text-muted-foreground">
+          or sign up with email
+        </span>
+      </div>
       <form action={formAction} className="space-y-4">
         {state?.error && (
           <Alert variant="destructive">

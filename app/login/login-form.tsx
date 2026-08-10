@@ -3,12 +3,15 @@
 import * as React from "react";
 import { useFormState, useFormStatus } from "react-dom";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { loginAction } from "@/lib/actions/auth";
 import { AuthShell } from "@/components/auth-shell";
+import { OAuthButtons } from "@/components/oauth-buttons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Separator } from "@/components/ui/separator";
 import { Loader2, LogIn } from "lucide-react";
 import { toast } from "sonner";
 
@@ -24,9 +27,14 @@ function SubmitButton() {
 
 export default function LoginForm() {
   const [state, formAction] = useFormState(loginAction, undefined);
+  const searchParams = useSearchParams();
+  const oauthError = searchParams.get("oauth_error");
+  const redirect = searchParams.get("redirect") || undefined;
+
   React.useEffect(() => {
     if (state?.error) toast.error(state.error);
-  }, [state]);
+    if (oauthError) toast.error(`Sign-in failed: ${oauthError}`);
+  }, [state, oauthError]);
 
   return (
     <AuthShell
@@ -41,6 +49,18 @@ export default function LoginForm() {
         </>
       }
     >
+      {oauthError && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertDescription>Sign-in failed: {oauthError}</AlertDescription>
+        </Alert>
+      )}
+      <OAuthButtons redirect={redirect} />
+      <div className="relative my-6">
+        <Separator />
+        <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-3 text-xs text-muted-foreground">
+          or continue with email
+        </span>
+      </div>
       <form action={formAction} className="space-y-4">
         {state?.error && (
           <Alert variant="destructive">

@@ -18,6 +18,7 @@ import { PublicFooter } from "@/components/public-footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { OAuthButtons } from "@/components/oauth-buttons";
 import { PLANS } from "@/lib/plans";
 
 const FEATURES = [
@@ -205,6 +206,29 @@ export default function HomePage() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Quick start / sign-in methods */}
+      <section className="container py-20">
+        <div className="mx-auto max-w-xl text-center">
+          <Badge variant="secondary" className="mb-4 gap-1.5">
+            <Zap className="h-3.5 w-3.5 text-primary" />
+            No setup required
+          </Badge>
+          <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Start in seconds</h2>
+          <p className="mx-auto mt-4 max-w-md text-muted-foreground">
+            Sign up with Google, GitHub, or your email — your workspace is ready instantly.
+          </p>
+          <div className="mx-auto mt-8 max-w-sm space-y-3">
+            <OAuthButtons />
+            <Button variant="gradient" size="lg" className="w-full" asChild>
+              <Link href="/register">
+                Create a free account <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+            <p className="text-xs text-muted-foreground">No credit card required · Free plan includes 25 prompts</p>
           </div>
         </div>
       </section>
