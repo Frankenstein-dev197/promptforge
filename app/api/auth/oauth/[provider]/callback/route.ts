@@ -29,10 +29,13 @@ export async function GET(
 ) {
   const { provider: providerParam } = await params;
   const provider = getProvider(providerParam);
-  const appUrl = process.env.APP_URL || "http://localhost:3000";
+  const appUrl = req.nextUrl.origin;
 
-  const errorRedirect = (message: string, target = "/login") =>
-    NextResponse.redirect(new URL(`${target}?oauth_error=${encodeURIComponent(message)}`, appUrl));
+  const errorRedirect = (message: string, target = "/login") => {
+    const url = new URL(target, appUrl);
+    url.searchParams.set("oauth_error", message);
+    return NextResponse.redirect(url);
+  };
 
   if (!provider) return errorRedirect("unknown_provider");
   if (!isProviderEnabled(provider.id)) return errorRedirect("provider_not_configured");
@@ -47,21 +50,21 @@ export async function GET(
 
   const state = await verifyState(stateParam);
   const cookieNonce = (await cookies()).get("pf_oauth_nonce")?.value;
-  if (!state || state.provider !== provider.id || (cookieNonce && state.nonce !== cookieNonce)) {
+  if (!state || state.provider !== provider.id || !cookieNonce || state.nonce !== cookieNonce) {
     return errorRedirect("invalid_state");
   }
 
+  // Consume the nonce before exchanging the code so the callback is one-time.
+  (await cookies()).delete("pf_oauth_nonce");
+
   let profile: OAuthProfile;
   try {
-    const tokens = await exchangeCodeForToken(provider, code, state.ver);
+    const tokens = await exchangeCodeForToken(provider, code, state.ver, appUrl);
     profile = await fetchProfile(provider, tokens.access_token);
   } catch (err) {
     const message = err instanceof Error ? err.message : "oauth_failed";
     return errorRedirect(message);
   }
-
-  // Clear the nonce cookie now that the flow is validated.
-  (await cookies()).delete("pf_oauth_nonce");
 
   // ---- Link mode: connect provider to the already-signed-in user ----
   if (state.mode === "link") {

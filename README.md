@@ -97,14 +97,14 @@ After seeding, these accounts are available:
 | `AUTH_SECRET`          | Secret used to sign JWT session + OAuth state tokens     | dev default (change in prod)     |
 | `SESSION_COOKIE_NAME`  | Name of the session cookie                               | `pf_session`                     |
 | `OPENAI_API_KEY`       | Optional. Enables real OpenAI completions & optimizer    | empty (uses local engine)        |
-| `GOOGLE_CLIENT_ID`     | Google OAuth client ID (server-side only)                | empty (Google hidden)            |
-| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret (server-side only)            | empty (Google hidden)            |
-| `GITHUB_CLIENT_ID`     | GitHub OAuth client ID (server-side only)                | empty (GitHub hidden)            |
-| `GITHUB_CLIENT_SECRET` | GitHub OAuth client secret (server-side only)            | empty (GitHub hidden)            |
+| `GOOGLE_CLIENT_ID`     | Google OAuth client ID (server-side only)                | empty (Google unavailable)       |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret (server-side only)            | empty (Google unavailable)       |
+| `GITHUB_CLIENT_ID`     | GitHub OAuth client ID (server-side only)                | empty (GitHub unavailable)       |
+| `GITHUB_CLIENT_SECRET` | GitHub OAuth client secret (server-side only)            | empty (GitHub unavailable)       |
 
 #### OAuth providers (optional but recommended)
 
-PromptForge supports **Google** and **GitHub** sign-in out of the box. Providers with missing credentials are simply hidden from the UI, so email/password auth always works.
+PromptForge supports **Google** and **GitHub** sign-in out of the box. The provider buttons are available in the UI, while the server keeps credentials private and returns a clear configuration error until a provider is configured.
 
 1. **Google** — Create OAuth credentials at the [Google Cloud Console](https://console.cloud.google.com/apis/credentials).
    Add the authorized redirect URI: `<APP_URL>/api/auth/oauth/google/callback`.

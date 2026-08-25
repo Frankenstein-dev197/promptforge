@@ -161,12 +161,12 @@ export function providerClientSecret(id: OAuthProviderId): string {
 }
 
 /** Base public URL of the app, used to build callback URLs. */
-export function appBaseUrl(): string {
-  return (process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "");
+export function appBaseUrl(origin?: string): string {
+  return (process.env.APP_URL || origin || "http://localhost:3000").replace(/\/$/, "");
 }
 
-export function callbackUrl(provider: OAuthProviderId): string {
-  return `${appBaseUrl()}/api/auth/oauth/${provider}/callback`;
+export function callbackUrl(provider: OAuthProviderId, origin?: string): string {
+  return `${appBaseUrl(origin)}/api/auth/oauth/${provider}/callback`;
 }
 
 /* ------------------------------ PKCE + state ------------------------------ */
@@ -214,12 +214,13 @@ export async function verifyState(token: string): Promise<OAuthStatePayload | nu
 export function buildAuthorizeUrl(
   provider: OAuthProviderConfig,
   challenge: string,
-  state: string
+  state: string,
+  origin?: string
 ): string {
   const params = new URLSearchParams({
     response_type: "code",
     client_id: providerClientId(provider.id),
-    redirect_uri: callbackUrl(provider.id),
+    redirect_uri: callbackUrl(provider.id, origin),
     scope: provider.scope,
     state,
     code_challenge: challenge,
@@ -242,12 +243,13 @@ type TokenResponse = {
 export async function exchangeCodeForToken(
   provider: OAuthProviderConfig,
   code: string,
-  verifier: string
+  verifier: string,
+  origin?: string
 ): Promise<TokenResponse> {
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code,
-    redirect_uri: callbackUrl(provider.id),
+    redirect_uri: callbackUrl(provider.id, origin),
     client_id: providerClientId(provider.id),
     client_secret: providerClientSecret(provider.id),
     code_verifier: verifier,

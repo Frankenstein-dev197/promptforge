@@ -60,6 +60,16 @@ describe("oauth url building", () => {
     );
   });
 
+  it("uses the request origin when APP_URL is not configured", async () => {
+    const mod = await import("@/lib/oauth");
+    const configuredAppUrl = process.env.APP_URL;
+    delete process.env.APP_URL;
+    expect(mod.callbackUrl("github", "https://preview.example.com/")).toBe(
+      "https://preview.example.com/api/auth/oauth/github/callback"
+    );
+    process.env.APP_URL = configuredAppUrl;
+  });
+
   it("builds an authorize url with PKCE challenge and state", async () => {
     const mod = await import("@/lib/oauth");
     const provider = mod.OAUTH_PROVIDERS.google;

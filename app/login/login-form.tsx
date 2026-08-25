@@ -62,6 +62,7 @@ export default function LoginForm() {
         </span>
       </div>
       <form action={formAction} className="space-y-4">
+        <input type="hidden" name="redirect" value={redirect ?? ""} />
         {state?.error && (
           <Alert variant="destructive">
             <AlertDescription>{state.error}</AlertDescription>

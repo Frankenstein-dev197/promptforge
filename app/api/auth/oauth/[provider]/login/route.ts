@@ -25,10 +25,12 @@ export async function GET(
 ) {
   const { provider: providerParam } = await params;
   const provider = getProvider(providerParam);
-  if (!provider) return NextResponse.json({ error: "unknown_provider" }, { status: 400 });
-  if (!isProviderEnabled(provider.id)) {
-    return NextResponse.json({ error: "provider_not_configured" }, { status: 503 });
-  }
+  const appUrl = req.nextUrl.origin;
+  const errorRedirect = (message: string) =>
+    NextResponse.redirect(new URL(`/login?oauth_error=${encodeURIComponent(message)}`, appUrl));
+
+  if (!provider) return errorRedirect("unknown_provider");
+  if (!isProviderEnabled(provider.id)) return errorRedirect("provider_not_configured");
 
   const { searchParams } = req.nextUrl;
   const redirect = searchParams.get("redirect") || undefined;
@@ -49,7 +51,7 @@ export async function GET(
     nonce,
   });
 
-  const authorizeUrl = buildAuthorizeUrl(provider, challenge, state);
+  const authorizeUrl = buildAuthorizeUrl(provider, challenge, state, appUrl);
 
   const res = NextResponse.redirect(authorizeUrl);
   // Belt-and-suspenders CSRF nonce cookie; the signed state JWT is the primary guard.

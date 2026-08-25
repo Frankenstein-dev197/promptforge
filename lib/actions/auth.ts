@@ -111,6 +111,13 @@ export async function loginAction(_prev: ActionState, formData: FormData): Promi
     return { error: parsed.error.issues[0].message };
   }
   const { email, password } = parsed.data;
+  const requestedRedirect = formData.get("redirect");
+  const safeRedirect =
+    typeof requestedRedirect === "string" &&
+    requestedRedirect.startsWith("/") &&
+    !requestedRedirect.startsWith("//")
+      ? requestedRedirect
+      : undefined;
   const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
   if (!user || !user.passwordHash) {
     return { error: "Invalid email or password." };
@@ -121,7 +128,7 @@ export async function loginAction(_prev: ActionState, formData: FormData): Promi
   }
   await audit(user.id, "login", "user", user.id);
   await createSession(user);
-  redirect(user.onboardingDone ? "/dashboard" : "/onboarding");
+  redirect(safeRedirect || (user.onboardingDone ? "/dashboard" : "/onboarding"));
 }
 
 export async function logoutAction() {
