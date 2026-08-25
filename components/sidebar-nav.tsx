@@ -12,6 +12,7 @@ import {
   Bell,
   Settings,
   User,
+  BookOpen,
   Shield,
   Sparkles,
   LifeBuoy,
@@ -34,6 +35,7 @@ type NavItem = {
 const NAV_MAIN: NavItem[] = [
   { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { title: "Prompts", href: "/prompts", icon: FileText },
+  { title: "Template library", href: "/library", icon: BookOpen },
   { title: "Collections", href: "/collections", icon: FolderTree },
   { title: "Playground", href: "/playground", icon: Play },
   { title: "Run history", href: "/playground/history", icon: History },

@@ -11,9 +11,13 @@ import { PromptTemplatePicker } from "./template-picker";
 
 export const metadata: Metadata = { title: "New prompt" };
 
-export default async function NewPromptPage() {
+type SearchParams = Promise<{ template?: string }>;
+
+export default async function NewPromptPage({ searchParams }: { searchParams: SearchParams }) {
   const session = await getSession();
   if (!session) return null;
+  const params = await searchParams;
+  const selectedTemplate = PROMPT_TEMPLATES.find((template) => template.slug === params.template);
   const collections = await prisma.collection.findMany({
     where: { userId: session.id },
     orderBy: { name: "asc" },
@@ -39,7 +43,16 @@ export default async function NewPromptPage() {
           <CardDescription>Fill in the details below to create your prompt.</CardDescription>
         </CardHeader>
         <CardContent>
-          <PromptForm collections={collections.map((c) => ({ id: c.id, name: c.name, color: c.color }))} />
+          <PromptForm
+            initial={selectedTemplate ? {
+              title: selectedTemplate.title,
+              description: selectedTemplate.description,
+              content: selectedTemplate.content,
+              model: selectedTemplate.model,
+              tags: selectedTemplate.tags,
+            } : undefined}
+            collections={collections.map((c) => ({ id: c.id, name: c.name, color: c.color }))}
+          />
         </CardContent>
       </Card>
     </div>

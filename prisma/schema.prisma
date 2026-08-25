@@ -72,6 +72,24 @@ model Collection {
   @@index([userId])
 }
 
+model PromptTemplate {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  category    String
+  title       String
+  description String
+  content     String
+  model       String
+  variables   String   @default("[]")
+  tags        String   @default("[]")
+  featured    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([category])
+  @@index([featured])
+}
+
 model Prompt {
   id           String   @id @default(cuid())
   userId       String

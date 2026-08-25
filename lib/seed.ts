@@ -1,5 +1,7 @@
 import { PrismaClient, Plan, Role } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { PROMPT_LIBRARY } from "@/lib/prompt-library";
+import { parseVariables } from "@/lib/utils";
 
 const prisma = new PrismaClient();
 
@@ -56,6 +58,34 @@ async function main() {
       useCase: "Learning prompt engineering",
     },
   });
+
+  // Global prompt library
+  for (const [index, template] of PROMPT_LIBRARY.entries()) {
+    await prisma.promptTemplate.upsert({
+      where: { slug: template.slug },
+      update: {
+        category: template.category,
+        title: template.title,
+        description: template.description,
+        content: template.content,
+        model: template.model,
+        variables: JSON.stringify(parseVariables(template.content)),
+        tags: JSON.stringify(template.tags),
+        featured: index < 4,
+      },
+      create: {
+        slug: template.slug,
+        category: template.category,
+        title: template.title,
+        description: template.description,
+        content: template.content,
+        model: template.model,
+        variables: JSON.stringify(parseVariables(template.content)),
+        tags: JSON.stringify(template.tags),
+        featured: index < 4,
+      },
+    });
+  }
 
   // Collections for demo user
   const marketing = await prisma.collection.create({

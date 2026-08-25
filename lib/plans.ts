@@ -124,45 +124,6 @@ export const COLLECTION_COLORS = [
   "fuchsia",
 ] as const;
 
-export const PROMPT_TEMPLATES = [
-  {
-    title: "Product description generator",
-    description: "Generate compelling e-commerce product copy.",
-    content:
-      "You are an expert copywriter. Write a product description for {{product}}.\n\nTarget audience: {{audience}}\nTone: {{tone}}\nKey benefits: {{benefits}}\n\nLength: 3 short paragraphs. End with a strong CTA.",
-    model: "gpt-4o",
-    tags: ["marketing", "copywriting"],
-  },
-  {
-    title: "Code reviewer",
-    description: "Review code for bugs and improvements.",
-    content:
-      "Review the following {{language}} code. Identify bugs, security issues, and suggest improvements.\n\nCode:\n```\n{{code}}\n```\n\nProvide a concise summary, then a numbered list of findings with severity (low/medium/high).",
-    model: "gpt-4o",
-    tags: ["engineering", "code-review"],
-  },
-  {
-    title: "Support ticket classifier",
-    description: "Classify and route customer support tickets.",
-    content:
-      "Classify the following support ticket.\n\nTicket: {{ticket}}\n\nReturn JSON with fields: category (one of billing, technical, feature-request, complaint), priority (low/medium/high), suggested_team, and a one-sentence summary.",
-    model: "gpt-4o-mini",
-    tags: ["support", "classification"],
-  },
-  {
-    title: "Meeting summarizer",
-    description: "Summarize meeting transcripts into action items.",
-    content:
-      "Summarize the following meeting transcript. Extract: key decisions, action items (with owners), and open questions.\n\nTranscript:\n{{transcript}}",
-    model: "claude-3-5-sonnet",
-    tags: ["productivity", "summary"],
-  },
-  {
-    title: "SQL query generator",
-    description: "Turn natural language into SQL.",
-    content:
-      "Given the following database schema, write a SQL query that answers the user's question.\n\nSchema:\n{{schema}}\n\nQuestion: {{question}}\n\nReturn only the SQL query, no explanation.",
-    model: "gpt-4o",
-    tags: ["data", "sql"],
-  },
-];
+import { PROMPT_LIBRARY } from "@/lib/prompt-library";
+
+export const PROMPT_TEMPLATES = PROMPT_LIBRARY;

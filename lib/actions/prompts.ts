@@ -1,12 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { promptSchema, collectionSchema } from "@/lib/validations";
 import { parseVariables } from "@/lib/utils";
 import { getPlanConfig } from "@/lib/plans";
 import type { Plan } from "@prisma/client";
+import { getPromptTemplateBySlug } from "@/lib/prompt-library-service";
 
 export type ActionState = { error?: string; success?: string } | undefined;
 
@@ -22,6 +24,56 @@ async function checkLimit(userId: string, plan: Plan, type: "prompts" | "collect
     if (count >= config.limits.maxCollections) {
       throw new Error(`You've reached the ${config.name} plan limit of ${config.limits.maxCollections} collections.`);
     }
+  }
+}
+
+// ---------- Global prompt library ----------
+export async function importPromptTemplateAction(slug: string, _formData: FormData): Promise<void> {
+  const session = await getSession();
+  if (!session) redirect("/login");
+
+  const template = await getPromptTemplateBySlug(slug);
+  if (!template) redirect("/library?error=template_not_found");
+
+  try {
+    await checkLimit(session.id, session.plan, "prompts");
+    const variables = parseVariables(template.content);
+    const prompt = await prisma.$transaction(async (tx) => {
+      const created = await tx.prompt.create({
+        data: {
+          userId: session.id,
+          title: template.title,
+          description: template.description,
+          content: template.content,
+          model: template.model,
+          variables: JSON.stringify(variables),
+          tags: JSON.stringify(template.tags),
+        },
+      });
+      await tx.promptVersion.create({
+        data: { promptId: created.id, content: template.content, version: 1, note: `Imported from ${template.slug}` },
+      });
+      await tx.auditLog.create({
+        data: {
+          userId: session.id,
+          action: "import_prompt_template",
+          entity: "prompt",
+          entityId: created.id,
+          meta: JSON.stringify({ template: template.slug }),
+        },
+      });
+      return created;
+    });
+    revalidatePath("/library");
+    revalidatePath("/prompts");
+    revalidatePath("/dashboard");
+    redirect(`/prompts?imported=${encodeURIComponent(prompt.title)}`);
+  } catch (e) {
+    if (e && typeof e === "object" && "digest" in e && String((e as { digest?: unknown }).digest).startsWith("NEXT_REDIRECT")) {
+      throw e;
+    }
+    const message = e instanceof Error ? e.message : "Failed to import template.";
+    redirect(`/library?error=${encodeURIComponent(message)}`);
   }
 }
 

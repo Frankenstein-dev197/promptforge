@@ -8,8 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { PromptCard } from "@/components/prompt-card";
 import { EmptyState } from "@/components/empty-state";
-import { PROMPT_TEMPLATES } from "@/lib/plans";
-import { formatNumber } from "@/lib/utils";
 
 export const metadata = { title: "Prompts" };
 

@@ -42,12 +42,10 @@ export function PromptPlayground({
         toast.error(res.error);
       } else if (res?.run) {
         setOutput(res.run.output);
-        // Fetch the run meta — we get it from the action response indirectly
-        // We'll approximate by re-deriving from the output length
         setRunMeta({
-          tokensIn: Math.max(1, Math.round(content.length / 4)),
-          tokensOut: Math.max(1, Math.round(res.run.output.length / 4)),
-          latencyMs: 0,
+          tokensIn: res.run.tokensIn,
+          tokensOut: res.run.tokensOut,
+          latencyMs: res.run.latencyMs,
         });
         toast.success("Run completed");
       }
@@ -160,6 +158,7 @@ export function PromptPlayground({
             <div className="flex flex-wrap gap-2 pt-1">
               <Badge variant="secondary" className="text-[10px]">In: {formatNumber(runMeta.tokensIn)} tok</Badge>
               <Badge variant="secondary" className="text-[10px]">Out: {formatNumber(runMeta.tokensOut)} tok</Badge>
+              <Badge variant="secondary" className="text-[10px]">{runMeta.latencyMs} ms</Badge>
               <Badge variant="outline" className="text-[10px] font-mono">{model}</Badge>
             </div>
           )}

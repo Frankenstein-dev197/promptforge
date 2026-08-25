@@ -12,7 +12,7 @@ export type ActionState = { error?: string; success?: string } | undefined;
 export async function runPromptAction(
   promptId: string,
   variables: Record<string, string>
-): Promise<ActionState & { run?: { id: string; output: string } }> {
+): Promise<ActionState & { run?: { id: string; output: string; tokensIn: number; tokensOut: number; latencyMs: number } }> {
   const session = await getSession();
   if (!session) return { error: "Not authenticated" };
   const prompt = await prisma.prompt.findFirst({ where: { id: promptId, userId: session.id } });
@@ -47,7 +47,16 @@ export async function runPromptAction(
     });
     revalidatePath(`/prompts/${promptId}`);
     revalidatePath("/dashboard");
-    return { success: "Run completed.", run: { id: run.id, output: result.output } };
+    return {
+      success: "Run completed.",
+      run: {
+        id: run.id,
+        output: result.output,
+        tokensIn: result.tokensIn,
+        tokensOut: result.tokensOut,
+        latencyMs: result.latencyMs,
+      },
+    };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Run failed.";
     await prisma.run.create({

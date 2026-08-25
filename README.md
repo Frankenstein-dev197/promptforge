@@ -8,7 +8,8 @@ PromptForge is a professional SaaS workspace for managing, versioning, testing, 
 
 ## ✨ Features
 
-- **Prompt library** — Full CRUD with starring, tagging, and instant search
+- **Prompt library** — Full CRUD with version history, starring, tagging, and instant search
+- **Template library** — Seven curated templates with categories, search, variable previews, database persistence, and one-click import into a private workspace
 - **Collections** — Group prompts by project or team with colored collections
 - **Version history** — Every content change is saved as a version; restore any previous version
 - **Playground** — Run prompts with `{{variables}}`, view completions, tokens, and latency in real time
@@ -157,7 +158,8 @@ Tests cover:
 app/
 ├── (app)/                 # Protected app routes (authenticated)
 │   ├── dashboard/         # Stats, charts, recent activity
-│   ├── prompts/           # Prompt library, detail, new
+│   ├── library/           # Global prompt template catalog and import service
+│   ├── prompts/           # Private prompt library, detail, new
 │   ├── collections/       # Collection management
 │   ├── playground/        # Run prompts + history
 │   ├── notifications/     # In-app notifications
@@ -196,7 +198,9 @@ lib/
 ├── prisma.ts              # Prisma client singleton
 ├── auth.ts                # Auth: hashing, sessions, JWT
 ├── ai.ts                  # Completion engine + optimizer
-├── plans.ts               # Plan configs, models, templates
+├── plans.ts               # Plan configs and models
+├── prompt-library.ts       # Source catalog of seven reusable templates
+├── prompt-library-service.ts # Database-backed search/filter/fallback service
 ├── validations.ts         # Zod schemas
 ├── queries.ts             # Dashboard data queries
 ├── utils.ts               # Shared utilities
@@ -217,8 +221,9 @@ middleware.ts              # Route protection (JWT verification)
 1. User registers → password hashed with bcrypt → user created → session JWT issued
 2. JWT stored in httpOnly cookie, also persisted in `Session` table for revocation
 3. Middleware verifies JWT on protected routes and gates onboarding
-4. `getSession()` server-side validates both JWT signature and DB session existence
-5. Onboarding updates `onboardingDone` and re-issues the session JWT
+4. The authenticated `/library` page searches the global template catalog and imports selected templates into the current user’s private library
+5. `getSession()` server-side validates both JWT signature and DB session existence
+6. Onboarding updates `onboardingDone` and re-issues the session JWT
 
 ### OAuth flow
 
