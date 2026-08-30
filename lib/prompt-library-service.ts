@@ -34,7 +34,7 @@ function fromStatic(template: PromptLibraryTemplate, index: number): PromptTempl
   return { ...template, id: `static-${template.slug}`, featured: index < 4 };
 }
 
-export async function listPromptTemplates(filters?: { query?: string; category?: string; featured?: boolean }) {
+export async function listPromptTemplates(filters?: { query?: string; category?: string; featured?: boolean }): Promise<PromptTemplateView[]> {
   const query = filters?.query?.trim();
   const category = filters?.category;
   const where = {
