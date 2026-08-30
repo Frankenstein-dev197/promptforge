@@ -255,24 +255,17 @@ export async function deleteAccountAction(): Promise<ActionState> {
 }
 
 export async function forgotPasswordAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const email = (formData.get("email") as string)?.toLowerCase();
+  const email = (formData.get("email") as string)?.trim().toLowerCase();
   if (!email) return { error: "Email is required" };
-  const user = await prisma.user.findUnique({ where: { email } });
-  // Always return success to avoid account enumeration
-  if (user) {
-    const token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
-    await prisma.auditLog.create({
-      data: {
-        userId: user.id,
-        action: "password_reset_request",
-        entity: "user",
-        entityId: user.id,
-        meta: JSON.stringify({ token, expires: Date.now() + 1000 * 60 * 30 }),
-      },
-    });
-    if (process.env.NODE_ENV !== "production") {
-      console.log(`[Password reset] token for ${email}: ${token}`);
-    }
+
+  const { createClient } = await import("@/lib/supabase/server");
+  const supabase = await createClient();
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || process.env.APP_URL || "http://localhost:3000"}/reset-password`,
+  });
+
+  if (error && !/not found|does not exist|invalid/i.test(error.message)) {
+    return { error: "Unable to send the reset email. Please try again later." };
   }
   return { success: "If an account exists, a reset link has been sent." };
 }
