@@ -143,16 +143,26 @@ export async function deleteCollectionAction(id: string): Promise<ActionState> {
 export async function createPromptAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const session = await getSession();
   if (!session) return { error: "Not authenticated" };
+  let tags: unknown = [];
+  try {
+    tags = JSON.parse((formData.get("tags") as string) || "[]");
+  } catch {
+    return { error: "Tags must be valid JSON." };
+  }
   const parsed = promptSchema.safeParse({
     title: formData.get("title"),
     description: formData.get("description"),
     content: formData.get("content"),
     model: formData.get("model"),
     collectionId: formData.get("collectionId") || null,
-    tags: JSON.parse((formData.get("tags") as string) || "[]"),
+    tags,
   });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   try {
+    if (parsed.data.collectionId) {
+      const collection = await prisma.collection.findFirst({ where: { id: parsed.data.collectionId, userId: session.id }, select: { id: true } });
+      if (!collection) return { error: "Collection not found." };
+    }
     await checkLimit(session.id, session.plan, "prompts");
     const variables = parseVariables(parsed.data.content);
     const prompt = await prisma.prompt.create({
@@ -183,17 +193,27 @@ export async function createPromptAction(_prev: ActionState, formData: FormData)
 export async function updatePromptAction(id: string, formData: FormData): Promise<ActionState> {
   const session = await getSession();
   if (!session) return { error: "Not authenticated" };
+  let tags: unknown = [];
+  try {
+    tags = JSON.parse((formData.get("tags") as string) || "[]");
+  } catch {
+    return { error: "Tags must be valid JSON." };
+  }
   const parsed = promptSchema.safeParse({
     title: formData.get("title"),
     description: formData.get("description"),
     content: formData.get("content"),
     model: formData.get("model"),
     collectionId: formData.get("collectionId") || null,
-    tags: JSON.parse((formData.get("tags") as string) || "[]"),
+    tags,
   });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const existing = await prisma.prompt.findFirst({ where: { id, userId: session.id } });
   if (!existing) return { error: "Prompt not found." };
+  if (parsed.data.collectionId) {
+    const collection = await prisma.collection.findFirst({ where: { id: parsed.data.collectionId, userId: session.id }, select: { id: true } });
+    if (!collection) return { error: "Collection not found." };
+  }
   const variables = parseVariables(parsed.data.content);
   const contentChanged = existing.content !== parsed.data.content;
   const updated = await prisma.prompt.update({

@@ -5,7 +5,6 @@ import { prisma } from "@/lib/prisma";
 import {
   createSession,
   destroySession,
-  hashPassword,
   verifyPassword,
 } from "@/lib/auth";
 import {
@@ -107,8 +106,8 @@ export async function registerAction(_prev: ActionState, formData: FormData): Pr
     },
   });
   await audit(user.id, "register", "user", user.id);
-  await createSession(user);
-  redirect("/onboarding");
+  if (data.session) redirect("/onboarding");
+  redirect("/login?registered=1");
 }
 
 export async function loginAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -137,7 +136,9 @@ export async function loginAction(_prev: ActionState, formData: FormData): Promi
 }
 
 export async function logoutAction() {
-  await destroySession();
+  const { createClient } = await import("@/lib/supabase/server");
+  const supabase = await createClient();
+  await supabase.auth.signOut();
   redirect("/login");
 }
 
@@ -222,8 +223,10 @@ export async function changePasswordAction(_prev: ActionState, formData: FormDat
     const valid = await verifyPassword(parsed.data.currentPassword, user.passwordHash);
     if (!valid) return { error: "Current password is incorrect." };
   }
-  const newHash = await hashPassword(parsed.data.newPassword);
-  await prisma.user.update({ where: { id: session.id }, data: { passwordHash: newHash } });
+  const { createClient } = await import("@/lib/supabase/server");
+  const supabase = await createClient();
+  const { error } = await supabase.auth.updateUser({ password: parsed.data.newPassword });
+  if (error) return { error: "Unable to save your password. Please try again." };
   await audit(session.id, user.passwordHash ? "change_password" : "set_password", "user", session.id);
   return { success: "Password saved successfully." };
 }
