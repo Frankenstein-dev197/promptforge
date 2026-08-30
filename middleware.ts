@@ -1,10 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { jwtVerify } from "jose";
+import { getAuthSecret } from "@/lib/secret";
 
 const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || "pf_session";
-const SECRET = new TextEncoder().encode(
-  process.env.AUTH_SECRET || "dev-insecure-secret-change-me"
-);
+const SECRET = new TextEncoder().encode(getAuthSecret());
 
 const PUBLIC_ROUTES = [
   "/",

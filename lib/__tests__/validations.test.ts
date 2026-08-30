@@ -6,6 +6,8 @@ import {
   collectionSchema,
   onboardingSchema,
   changePasswordSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
 } from "@/lib/validations";
 
 describe("registerSchema", () => {
@@ -107,5 +109,28 @@ describe("changePasswordSchema", () => {
   });
   it("rejects weak new password", () => {
     expect(changePasswordSchema.safeParse({ ...valid, newPassword: "weak", confirmPassword: "weak" }).success).toBe(false);
+  });
+});
+
+describe("forgotPasswordSchema", () => {
+  it("accepts a valid email", () => {
+    expect(forgotPasswordSchema.safeParse({ email: "a@b.com" }).success).toBe(true;
+  });
+  it("rejects an invalid email", () => {
+    expect(forgotPasswordSchema.safeParse({ email: "bad" }).success).toBe(false;
+  });
+});
+
+
+describe("resetPasswordSchema", () => {
+  const valid = { token: "abc", password: "Password1", confirmPassword: "Password1" };
+  it("accepts valid input", () => {
+    expect(resetPasswordSchema.safeParse(valid).success).toBe(true;
+  });
+ it("rejects mismatched passwords", () => {
+    expect(resetPasswordSchema.safeParse({ ...valid, confirmPassword: "Other1A" }).success).toBe(false;
+  });
+ it("rejects missing token", () => {
+    expect(resetPasswordSchema.safeParse({ ...valid, token: "" }).success).toBe(false;
   });
 });

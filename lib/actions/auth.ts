@@ -8,12 +8,15 @@ import {
   hashPassword,
   verifyPassword,
 } from "@/lib/auth";
+import { createHash, randomBytes } from "crypto";
 import {
   loginSchema,
   registerSchema,
   onboardingSchema,
   profileSchema,
   changePasswordSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
 } from "@/lib/validations";
 
 export type ActionState = { error?: string; success?: string } | undefined;
@@ -249,25 +252,60 @@ export async function deleteAccountAction(): Promise<ActionState> {
   redirect("/login");
 }
 
+function hashResetToken(token: string) {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+
 export async function forgotPasswordAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const email = (formData.get("email") as string)?.toLowerCase();
-  if (!email) return { error: "Email is required" };
+  const parsed = forgotPasswordSchema.safeParse({ email: formData.get("email") });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const email = parsed.data.email.toLowerCase();
   const user = await prisma.user.findUnique({ where: { email } });
-  // Always return success to avoid account enumeration
+  // Always return the same message to avoid account enumeration
   if (user) {
-    const token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
-    await prisma.auditLog.create({
+    const raw = randomBytes(32).toString("hex");
+    const tokenHash = hashResetToken(raw);
+    await prisma.passwordResetToken.deleteMany({ where: { userId: user.id } });
+    await prisma.passwordResetToken.create({
       data: {
         userId: user.id,
-        action: "password_reset_request",
-        entity: "user",
-        entityId: user.id,
-        meta: JSON.stringify({ token, expires: Date.now() + 1000 * 60 * 30 }),
+        tokenHash,
+        expiresAt: new Date(Date.now() + 30 * 60 * 1000),
       },
     });
+    await audit(user.id, "password_reset_request", "user", user.id);
     if (process.env.NODE_ENV !== "production") {
-      console.log(`[Password reset] token for ${email}: ${token}`);
+      const base = process.env.APP_URL || "http://localhost:3000";
+      console.log(`[Password reset] ${base}/reset-password?token=${raw}`);
     }
   }
   return { success: "If an account exists, a reset link has been sent." };
+}
+
+
+export async function resetPasswordAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const parsed = resetPasswordSchema.safeParse({
+    token: formData.get("token"),
+    password: formData.get("password"),
+    confirmPassword: formData.get("confirmPassword"),
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+
+  const tokenHash = hashResetToken(parsed.data.token);
+  const record = await prisma.passwordResetToken.findFirst({
+    where: { tokenHash, usedAt: null, expiresAt: { gt: new Date() } },
+  });
+  if (!record) return { error: "This reset link is invalid or has expired." };
+
+
+  const passwordHash = await hashPassword(parsed.data.password);
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: record.userId }, data: { passwordHash } }),
+    prisma.passwordResetToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
+    prisma.session.deleteMany({ where: { userId: record.userId } }),
+  ]);
+  await audit(record.userId,"password_reset", "user", record.userId);
+  return { success: "Password updated.You can sign in now." };
 }

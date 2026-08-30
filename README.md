@@ -132,7 +132,8 @@ PromptForge ships with a **built-in deterministic completion engine** so the pla
 | `npm run lint`    | Run ESLint                                   |
 | `npm run typecheck` | TypeScript type checking                    |
 | `npm test`        | Run unit tests (Vitest)                      |
-| `npm run db:push` | Push schema to database                      |
+| `npm run db:push` | Push schema to database (non-destructive)    |
+| `npm run db:reset` | Recreate the database (DESTRUCTIVE)         |
 | `npm run db:seed` | Seed demo data                               |
 | `npm run db:studio` | Open Prisma Studio                         |
 
@@ -256,13 +257,22 @@ npm run start
 
 ### Deploy to Vercel
 
+SQLite **does not work** on Vercel serverless (ephemeral filesystem, multiple instances. Use PostgreSQL (Neon, Supabase, or Vercel Postgres..
+
+
 1. Push the repository to GitHub
 2. Import the project in Vercel
-3. Set environment variables (use a strong `AUTH_SECRET`)
-4. For SQLite: use a persistent volume or switch `DATABASE_URL` to PostgreSQL (update `prisma/schema.prisma` provider)
-5. Deploy
+3. Set environment variables:
+   - `AUTH_SECRET` — required, 32+ random characters (`openssl rand -base64 48`)
+   - `APP_URL` — your production URL (`https://your-domain.com`)
+   - `DATABASE_URL` — PostgreSQL connection string
+   - OAuth keys if you want Google / GitHub sign-in
+4. In `prisma/schema.prisma`, change `provider = "sqlite"` to `provider = "postgresql"`
+5. Run `npx prisma db push` (or migrate) against the production database, then deploy
 
-> **Note:** SQLite is great for development and small deployments. For production with multiple instances, switch to PostgreSQL by changing the Prisma `provider` and `DATABASE_URL`.
+
+> Local development can keep SQLite (`file:./dev.db`.. Production must use PostgreSQL..
+
 
 ---
 
@@ -278,12 +288,14 @@ npm run start
 - Admin routes protected by role check
 - Zod validation on all inputs
 - `.env` excluded from Git via `.gitignore`
+- `AUTH_SECRET` is required in production (no insecure fallback`
+- Password reset tokens are SHA-256 hashed, expire in 30 minutes,and are single-use
 
 ---
 
 ## 📄 License
 
-This project is provided as-is for demonstration purposes.
+MIT — see `LICENSE`.
 
 ---
 

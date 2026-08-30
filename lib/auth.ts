@@ -4,10 +4,11 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import type { User } from "@prisma/client";
 
+import { getAuthSecret } from "@/lib/secret";
+
+
 const COOKIE_NAME = process.env.SESSION_COOKIE_NAME || "pf_session";
-const SECRET = new TextEncoder().encode(
-  process.env.AUTH_SECRET || "dev-insecure-secret-change-me"
-);
+const SECRET = new TextEncoder().encode(getAuthSecret());
 const SESSION_DAYS = 30;
 
 export type SessionUser = Pick<
