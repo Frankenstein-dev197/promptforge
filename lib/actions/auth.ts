@@ -85,10 +85,19 @@ export async function registerAction(_prev: ActionState, formData: FormData): Pr
   if (existing) {
     return { error: "An account with this email already exists." };
   }
-  const passwordHash = await hashPassword(password);
-  const user = await prisma.user.create({
-    data: { email: email.toLowerCase(), name, passwordHash },
+  const { createClient } = await import("@/lib/supabase/server");
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.signUp({
+    email: email.toLowerCase(),
+    password,
+    options: {
+      emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || `${process.env.APP_URL || "http://localhost:3000"}/auth/callback`,
+      data: { full_name: name },
+    },
   });
+  if (error) return { error: error.message.includes("already") ? "An account with this email already exists." : "Unable to create your account." };
+  if (!data.user) return { error: "Unable to create your account." };
+  const user = await prisma.user.upsert({ where: { email: email.toLowerCase() }, update: { name }, create: { email: email.toLowerCase(), name, passwordHash: null } });
   await prisma.notification.create({
     data: {
       userId: user.id,
@@ -118,16 +127,12 @@ export async function loginAction(_prev: ActionState, formData: FormData): Promi
     !requestedRedirect.startsWith("//")
       ? requestedRedirect
       : undefined;
-  const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-  if (!user || !user.passwordHash) {
-    return { error: "Invalid email or password." };
-  }
-  const valid = await verifyPassword(password, user.passwordHash);
-  if (!valid) {
-    return { error: "Invalid email or password." };
-  }
+  const { createClient } = await import("@/lib/supabase/server");
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.signInWithPassword({ email: email.toLowerCase(), password });
+  if (error || !data.user?.email) return { error: "Invalid email or password." };
+  const user = await prisma.user.upsert({ where: { email: data.user.email.toLowerCase() }, update: {}, create: { email: data.user.email.toLowerCase(), passwordHash: null } });
   await audit(user.id, "login", "user", user.id);
-  await createSession(user);
   redirect(safeRedirect || (user.onboardingDone ? "/dashboard" : "/onboarding"));
 }
 

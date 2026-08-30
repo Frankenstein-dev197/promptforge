@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { OAuthProviderIcon } from "@/components/oauth-icons";
+import { createClient } from "@/lib/supabase/client";
 import { OAUTH_PROVIDER_OPTIONS, type PublicOAuthProviderId } from "@/lib/oauth-public";
 import { cn } from "@/lib/utils";
 
@@ -23,12 +24,13 @@ export function OAuthButtons({
 }) {
   const [loading, setLoading] = React.useState<PublicOAuthProviderId | null>(null);
 
-  function startFlow(providerId: PublicOAuthProviderId) {
+  async function startFlow(providerId: PublicOAuthProviderId) {
     setLoading(providerId);
-    const params = new URLSearchParams();
-    if (redirect) params.set("redirect", redirect);
-    if (mode === "link") params.set("mode", "link");
-    window.location.assign(`/api/auth/oauth/${providerId}/login?${params.toString()}`);
+    const supabase = createClient();
+    const callback = new URL("/auth/callback", window.location.origin);
+    if (redirect) callback.searchParams.set("next", redirect);
+    const { error } = await supabase.auth.signInWithOAuth({ provider: providerId, options: { redirectTo: callback.toString() } });
+    if (error) setLoading(null);
   }
 
   return (
